@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/codeclysm/extract/v4"
 	"github.com/go-git/go-git/v5"
@@ -75,6 +76,29 @@ func main() {
 	if err != nil {
 		fmt.Println("Error getting git reference:", err)
 		return
+	}
+	w, err := r.Worktree()
+	if err != nil {
+		fmt.Println("Error getting git worktree:", err)
+		return
+	}
+	// Check if the repo contains modifications in either variants or firmwares folders
+	status, err := w.StatusWithOptions(git.StatusOptions{Strategy: git.Preload})
+	if err != nil {
+		fmt.Println("Error getting git status:", err)
+		return
+	}
+	if !status.IsClean() {
+		// Check if there are untracked/modified files in the firmwares or variants folders
+		for path, s := range status {
+			if strings.HasPrefix(path, "firmwares/") || strings.HasPrefix(path, "variants/") {
+				fmt.Println("The git repository contains uncommitted changes in", path)
+				if s.Worktree != git.Untracked {
+					fmt.Println("Please stash them before running this script.")
+				}
+				return
+			}
+		}
 	}
 	fmt.Println("Git tag:", ref.Hash())
 	// Replace {git_tag} with the actual git tag in the URL
